@@ -75,6 +75,19 @@
         }
         throw new Error("Timed out waiting for the game");
       };
+      const navigate = (doc, win, target) => {
+        const current = Number(
+          doc.querySelector('[data-room-index][aria-current="location"]')
+            .dataset.roomIndex,
+        );
+        for (let step = 0; step < Math.abs(target - current); step++)
+          doc.dispatchEvent(
+            new win.KeyboardEvent("keydown", {
+              key: target > current ? "w" : "s",
+              bubbles: true,
+            }),
+          );
+      };
       document.querySelector("#run").onclick = async () => {
         const runButton = document.querySelector("#run");
         runButton.disabled = true;
@@ -84,10 +97,21 @@
           let doc = win.document;
           doc.querySelector('[data-action="start"]').click();
           check(
+            !doc.querySelector("#loading-screen").hidden &&
+              doc.querySelector("#timer").textContent === "00:00",
+            "Start shows the loading screen before the survival clock begins.",
+          );
+          await waitUntil(() => !doc.querySelector("#game-screen").hidden);
+          check(
             doc.querySelector("#current-room").textContent === "Outside",
             "Start puts the player outside.",
           );
           doc.querySelector('[data-tool="pliers"]').click();
+          doc.querySelector('[data-room-index="3"]').click();
+          check(
+            doc.querySelector("#current-room").textContent === "Outside",
+            "The right-side room status cannot change rooms by mouse.",
+          );
           doc.dispatchEvent(
             new win.KeyboardEvent("keydown", { key: "w", bubbles: true }),
           );
@@ -108,15 +132,15 @@
           let roomIndex = ["outside", "living", "dining", "bedroom"].indexOf(
             room,
           );
-          doc.querySelector(`[data-room-index="${roomIndex}"]`).click();
+          navigate(doc, win, roomIndex);
           fault.click();
           check(
             doc.querySelector("#toast").textContent.includes("needs gloves"),
             "A repair rejects the wrong tool and explains what is needed.",
           );
-          doc.querySelector('[data-action="go-outside"]').click();
+          navigate(doc, win, 0);
           doc.querySelector('[data-tool="gloves"]').click();
-          doc.querySelector(`[data-room-index="${roomIndex}"]`).click();
+          navigate(doc, win, roomIndex);
           let id = fault.dataset.appliance;
           for (let i = 0; i < 6; i++)
             doc.querySelector(`[data-appliance="${id}"]`).click();
@@ -151,13 +175,14 @@
           win = await load("hold");
           doc = win.document;
           doc.querySelector('[data-action="start"]').click();
+          await waitUntil(() => !doc.querySelector("#game-screen").hidden);
           doc.querySelector('[data-tool="pliers"]').click();
           await waitUntil(() => doc.querySelector(".faulty"));
           fault = doc.querySelector(".faulty");
           id = fault.dataset.appliance;
           room = fault.closest("[data-room]").dataset.room;
           roomIndex = ["outside", "living", "dining", "bedroom"].indexOf(room);
-          doc.querySelector(`[data-room-index="${roomIndex}"]`).click();
+          navigate(doc, win, roomIndex);
           fault.dispatchEvent(
             new win.PointerEvent("pointerdown", { button: 0, bubbles: true }),
           );
@@ -191,12 +216,12 @@
           check(
             doc.querySelector("#appliance-count").textContent ===
               "12 appliances",
-            "Two minutes of gameplay adds an appliance in every indoor room.",
+            "Thirty seconds of gameplay adds an appliance in every indoor room.",
           );
           doc.querySelector('[data-action="pause"]').click();
           const done = document.createElement("h2");
           done.id = "all-passed";
-          done.textContent = "All 11 browser interaction checks passed.";
+          done.textContent = `All ${results.querySelectorAll(".pass").length} browser interaction checks passed.`;
           results.after(done);
         } catch (error) {
           const row = document.createElement("li");

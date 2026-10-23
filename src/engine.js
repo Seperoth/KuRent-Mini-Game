@@ -1,6 +1,16 @@
-export const LIMIT = 20_000;
-export const GRACE = 60;
-export const DIFFICULTY_INTERVAL = 120;
+export const LIMIT = 5_000;
+export const GRACE = 20;
+export const DIFFICULTY_INTERVAL = 30;
+export const MIN_FAULT_INTERVAL = 2;
+export const MIN_GRACE = 4;
+export function graceForLevel(level) {
+  return Math.max(MIN_GRACE, GRACE - 2 * (level - 1));
+}
+export function leakRate(item, time, level) {
+  if (!item.fault || time + 1e-8 < item.fault.deadline) return 0;
+  const steps = Math.floor((time - item.fault.deadline + 1e-8) / 10);
+  return 1 + 5 * (level - 1) + steps * 2;
+}
 export const ROOMS = ["outside", "living", "dining", "bedroom"];
 export const ROOM_NAMES = ["Outside", "Living room", "Dining room", "Bedroom"];
 
@@ -61,7 +71,8 @@ export function createGame(random = Math.random) {
     tool: null,
     appliances: [],
     repaired: 0,
-    nextFault: 8,
+    nextFault: 10 + random() * 2,
+    faultReduction: 0,
     hold: null,
     revision: 0,
     lastEvent: null,
@@ -114,7 +125,7 @@ export function createGame(random = Math.random) {
     const holdMin = Math.min(6, 3 + (state.level - 1) * 0.5);
     item.fault = {
       method,
-      deadline: state.time + GRACE,
+      deadline: state.time + graceForLevel(state.level),
       progress: 0,
       required:
         method === "hold"
@@ -170,26 +181,11 @@ export function createGame(random = Math.random) {
       state.hold = null;
     }
   }
-  function tick(delta) {
-    if (state.status !== "playing" || delta <= 0) return;
-    const previousTime = state.time;
-    state.time += delta;
-    for (const item of state.appliances) {
-      if (item.fault && item.fault.deadline < state.time) {
-        // Integrate only the time after this fault's grace period has ended.
-        state.bill += state.time - Math.max(previousTime, item.fault.deadline);
-      }
-    }
-    if (state.bill >= LIMIT) {
-      state.bill = LIMIT;
-      state.status = "over";
-      cancelHold();
-      state.revision++;
-      return;
-    }
-    const nextLevel = 1 + Math.floor(state.time / DIFFICULTY_INTERVAL);
+  function processEvents() {
+    const nextLevel = 1 + Math.floor((state.time + 1e-8) / DIFFICULTY_INTERVAL);
     if (nextLevel > state.level) {
       for (let level = state.level + 1; level <= nextLevel; level++) {
+        state.faultReduction += 1 + random();
         if (level <= 4)
           for (const room of ROOMS.slice(1)) addAppliance(room, level + 1);
       }
@@ -197,19 +193,69 @@ export function createGame(random = Math.random) {
       state.lastEvent = { type: "level", time: state.time };
       state.revision++;
     }
-    if (state.hold) {
-      const item = state.appliances.find((a) => a.id === state.hold);
-      if (item?.fault) {
-        item.fault.progress += delta;
-        if (item.fault.progress >= item.fault.required) repair(item);
-      }
-    }
-    if (state.time >= state.nextFault) {
+    if (state.time + 1e-8 >= state.nextFault) {
       faultAppliance();
-      state.nextFault =
-        state.time + Math.max(5, 19 - state.level * 2) + random() * 5;
+      const minimum = Math.max(MIN_FAULT_INTERVAL, 10 - state.faultReduction);
+      const maximum = Math.max(MIN_FAULT_INTERVAL, 12 - state.faultReduction);
+      state.nextFault = state.time + minimum + random() * (maximum - minimum);
     }
   }
+  function tick(delta) {
+    if (state.status !== "playing" || !Number.isFinite(delta) || delta <= 0)
+      return;
+    const end = state.time + delta;
+    processEvents();
+    // Split at each rate change, deadline, level, fault and completed repair.
+    // A long frame must charge the same amount as many short frames.
+    while (state.time < end - 1e-9 && state.status === "playing") {
+      let boundary = Math.min(
+        end,
+        state.level * DIFFICULTY_INTERVAL,
+        state.nextFault,
+      );
+      let rate = 0;
+      for (const item of state.appliances) {
+        if (!item.fault) continue;
+        if (item.fault.deadline > state.time + 1e-8)
+          boundary = Math.min(boundary, item.fault.deadline);
+        else {
+          const steps = Math.floor(
+            (state.time - item.fault.deadline + 1e-8) / 10,
+          );
+          boundary = Math.min(boundary, item.fault.deadline + (steps + 1) * 10);
+        }
+        rate += leakRate(item, state.time, state.level);
+      }
+      const held = state.appliances.find(
+        (item) => item.id === state.hold && item.fault,
+      );
+      if (held)
+        boundary = Math.min(
+          boundary,
+          state.time + held.fault.required - held.fault.progress,
+        );
+      if (rate > 0)
+        boundary = Math.min(
+          boundary,
+          state.time + Math.max(0, LIMIT - state.bill) / rate,
+        );
+      const elapsed = Math.max(0, boundary - state.time);
+      state.bill = Math.min(LIMIT, state.bill + elapsed * rate);
+      if (held) held.fault.progress += elapsed;
+      state.time = boundary;
+      if (state.bill >= LIMIT - 1e-7) {
+        state.bill = LIMIT;
+        state.status = "over";
+        cancelHold();
+        state.revision++;
+        return;
+      }
+      if (held && held.fault.progress >= held.fault.required - 1e-8)
+        repair(held);
+      processEvents();
+    }
+  }
+
   return {
     state,
     start,

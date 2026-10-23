@@ -5,7 +5,6 @@ import {
   cylinder,
   sphere,
   plant,
-  table,
   material,
   palette as P,
 } from "./models.js";
@@ -13,6 +12,7 @@ import {
 import { ROOM_Z } from "./room-layout.js";
 import { createRoomFixtures } from "./furniture.js";
 import { createPlacedAppliance, auditPlacements } from "./placement.js";
+import { createToolTable } from "./tool-station.js";
 
 function floorTexture(checkered = false) {
   const canvas = document.createElement("canvas");
@@ -318,25 +318,7 @@ function exterior(scene) {
   box(mailbox, 0.8, 0.36, 0.045, 0, 2.24, 0.45, "#653a22", 0.09);
   box(mailbox, 0.1, 0.7, 0.05, 0.73, 2.57, 0.1, "#c5984d");
   box(mailbox, 0.35, 0.22, 0.05, 0.85, 2.82, 0.1, "#c5984d");
-  const bench = new THREE.Group();
-  bench.position.set(-5.4, 0, 12.5);
-  bench.rotation.y = 0.2;
-  g.add(bench);
-  table(bench, 0, 0, 3.2, 1.2, 1.4, "#a77845");
-  box(bench, 1.25, 0.55, 0.65, -0.6, 1.78, 0, "#886236", 0.06);
-  box(bench, 0.7, 0.4, 0.5, 0.75, 1.7, 0, "#5c6844", 0.06);
-  for (let i = 0; i < 4; i++)
-    cylinder(
-      bench,
-      0.035,
-      0.035,
-      0.7,
-      -0.9 + i * 0.2,
-      2.25,
-      0,
-      ["#a89b68", "#756e46"][i % 2],
-      8,
-    ).rotation.z = 0.3;
+  g.userData.toolStation = createToolTable(g);
   return g;
 }
 
@@ -376,7 +358,7 @@ export class HouseWorld {
     sun.shadow.normalBias = 0.045;
     sun.shadow.bias = -0.0002;
     this.scene.add(sun);
-    exterior(this.scene);
+    this.toolStation = exterior(this.scene).userData.toolStation;
     this.rooms = {};
     this.roomFixtures = {};
     for (const [name, z] of Object.entries(ROOM_Z)) {
@@ -497,6 +479,8 @@ export class HouseWorld {
     document.body.dataset.placementIssues = "0";
   }
   render(now, state) {
+    for (const [kind, value] of Object.entries(this.toolStation.tools))
+      value.halo.visible = state.tool === kind;
     const pose = this.controls.update(now);
     this.camera.position.set(...pose.position);
     this.camera.lookAt(...pose.target);
@@ -506,6 +490,20 @@ export class HouseWorld {
     }
     const projected = [];
     const time = now / 1000;
+    if (state.room === 0 && state.status !== "ready") {
+      for (const [kind, value] of Object.entries(this.toolStation.tools)) {
+        const anchor = value.model.getWorldPosition(new THREE.Vector3());
+        anchor.project(this.camera);
+        projected.push({
+          id: `tool-${kind}`,
+          tool: kind,
+          x: (anchor.x * 0.5 + 0.5) * this.width,
+          y: (-anchor.y * 0.5 + 0.5) * this.height,
+          scale: Math.max(0.7, Math.min(1.2, this.width / 1440)),
+          visible: anchor.z < 1 && anchor.z > -1,
+        });
+      }
+    }
     for (const item of state.appliances) {
       const value = this.models.get(item.id);
       if (!value) continue;

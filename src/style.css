@@ -531,7 +531,7 @@ button {
   margin-bottom: 9px;
   padding-left: 5px;
 }
-.house-map button {
+.house-map .room-stop {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -543,16 +543,16 @@ button {
   position: relative;
   border: 1px solid transparent;
 }
-.house-map button:hover {
+.house-map .room-stop:hover {
   background: #a17b3429;
   color: #f7e0ac;
 }
-.house-map button.selected {
+.house-map .room-stop.selected {
   background: #92703529;
   border-color: #b58e4e66;
   color: #f0d394;
 }
-.house-map button.selected:before {
+.house-map .room-stop.selected:before {
   content: "";
   position: absolute;
   left: -11px;
@@ -565,7 +565,7 @@ button {
   display: flex;
   color: #be9f61;
 }
-.house-map button b {
+.house-map .room-stop b {
   font-size: 10px;
   font-weight: 600;
   margin-left: auto;
@@ -737,7 +737,7 @@ button {
   align-items: center;
   gap: 18px;
 }
-.movement-controls > button {
+.movement-controls > .movement-key {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -746,7 +746,7 @@ button {
   letter-spacing: 1.8px;
   padding: 0;
 }
-.movement-controls > button:hover:enabled {
+.movement-controls > .movement-key:hover:enabled {
   color: #ffe4a3;
 }
 kbd {
@@ -1406,7 +1406,7 @@ kbd {
     min-width: 124px;
     padding: 12px 8px;
   }
-  .house-map button {
+  .house-map .room-stop {
     font-size: 11px;
     gap: 7px;
     padding: 8px 6px;
@@ -1428,7 +1428,7 @@ kbd {
   .movement-controls {
     gap: 10px;
   }
-  .movement-controls > button {
+  .movement-controls > .movement-key {
     gap: 8px;
     font-size: 8px;
     letter-spacing: 1.2px;
@@ -1531,7 +1531,7 @@ kbd {
     padding-bottom: 11px;
     gap: 2px;
   }
-  .house-map button {
+  .house-map .room-stop {
     padding-top: 7px;
     padding-bottom: 7px;
   }
@@ -1669,20 +1669,20 @@ kbd {
     padding: 9px 6px;
   }
   .house-map .map-label,
-  .house-map button > span:nth-child(2),
+  .house-map .room-stop > span:nth-child(2),
   .house-map small {
     display: none;
   }
-  .house-map button {
+  .house-map .room-stop {
     padding: 9px 7px;
   }
-  .house-map button b {
+  .house-map .room-stop b {
     position: absolute;
     right: 0;
     top: 1px;
     font-size: 9px;
   }
-  .house-map button.selected:before {
+  .house-map .room-stop.selected:before {
     left: -7px;
   }
   .play-dock {
@@ -1714,7 +1714,7 @@ kbd {
     font-size: 7px;
     letter-spacing: 1px;
   }
-  .movement-controls > button {
+  .movement-controls > .movement-key {
     font-size: 7px;
     gap: 6px;
   }
@@ -1915,7 +1915,7 @@ kbd {
     margin-left: auto;
     gap: 10px;
   }
-  .movement-controls > button > span {
+  .movement-controls > .movement-key > span {
     display: none;
   }
   .movement-controls kbd {
@@ -2064,15 +2064,7 @@ kbd {
     transition-duration: 0.001ms !important;
   }
 }
-.menu-illustration {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  z-index: -2;
-  pointer-events: none;
-}
+
 .room-heading {
   padding: 9px 24px 12px;
   background: linear-gradient(90deg, transparent, #24190680, transparent);
@@ -2090,22 +2082,22 @@ kbd {
     font-size: 5px;
     letter-spacing: 0.8px;
   }
-  .house-map button {
+  .house-map .room-stop {
     justify-content: center;
     padding: 10px 7px;
   }
-  .house-map button > span:nth-child(2),
+  .house-map .room-stop > span:nth-child(2),
   .house-map small {
     display: none;
   }
-  .house-map button b {
+  .house-map .room-stop b {
     position: absolute;
     right: 0;
     top: 0;
     font-size: 9px;
   }
-  .house-map button:hover::after,
-  .house-map button:focus-visible::after {
+  .house-map .room-stop:hover::after,
+  .house-map .room-stop:focus-visible::after {
     content: attr(aria-label);
     position: absolute;
     right: calc(100% + 15px);
@@ -2116,5 +2108,205 @@ kbd {
     white-space: nowrap;
     font-size: 12px;
     letter-spacing: 0.6px;
+  }
+}
+
+/* The equipped tool sits in a large semicircular dock, visible in every room. */
+#table-tools {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+.table-tool-target {
+  position: absolute;
+  width: 130px;
+  height: 92px;
+  left: -1000px;
+  top: -1000px;
+  transform: translate(-50%, -50%) scale(var(--distance-scale, 1));
+  pointer-events: auto;
+  border: 1px solid transparent;
+  border-radius: 50%;
+}
+.table-tool-target:hover,
+.table-tool-target:focus-visible {
+  border-color: #e3c476b0;
+  background: #e3c47614;
+}
+.table-tool-target span {
+  opacity: 0;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #251b0eef;
+  padding: 6px 12px;
+  color: #efcf88;
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+.table-tool-target:hover span,
+.table-tool-target:focus-visible span {
+  opacity: 1;
+}
+.equipped-tool {
+  position: absolute;
+  left: -10px;
+  bottom: -27px;
+  width: 310px;
+  height: 156px;
+  min-width: 0;
+  border: 1px solid #cba65c99;
+  border-bottom: 0;
+  border-radius: 170px 170px 0 0;
+  background: radial-gradient(ellipse at 50% 100%, #715326cf, #251b0df5 80%);
+  box-shadow:
+    inset 0 8px 24px #d6ae4c12,
+    0 -6px 35px #170f0040;
+  padding: 36px 32px 30px;
+  gap: 22px;
+}
+.equipped-tool::before {
+  content: "";
+  position: absolute;
+  inset: 9px 9px 0;
+  border: 1px solid #b7974c33;
+  border-bottom: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.equipped-tool > svg {
+  width: 52px;
+  height: 52px;
+}
+.equipped-tool small {
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+.equipped-tool b {
+  font-family: "Anton", sans-serif;
+  font-weight: 400;
+  font-size: 25px;
+  letter-spacing: 1.6px;
+}
+.equipped-tool .swap-hint {
+  display: block;
+  position: absolute;
+  bottom: 17px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  font-size: 9px;
+  letter-spacing: 1.4px;
+  white-space: nowrap;
+}
+.play-dock {
+  justify-content: flex-end;
+}
+.movement-controls {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.movement-key.at-edge {
+  opacity: 0.3;
+}
+.house-map .room-stop {
+  cursor: default;
+}
+.house-map .room-stop:hover {
+  background: transparent;
+}
+.tool-station {
+  bottom: 110px;
+  padding: 16px 20px;
+  gap: 14px;
+}
+.station-copy {
+  min-width: 180px;
+}
+.tool-pick {
+  padding: 14px 17px;
+}
+.loading-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: #170f08db;
+  backdrop-filter: blur(7px);
+}
+.loading-content {
+  text-align: center;
+  width: min(470px, 75vw);
+}
+.loading-content h2 {
+  font:
+    400 35px "Anton",
+    sans-serif;
+  letter-spacing: 3px;
+  margin: 16px 0;
+}
+.loading-content p {
+  color: #cbb287;
+  font-size: 17px;
+  letter-spacing: 0.6px;
+}
+.loading-track {
+  height: 4px;
+  margin: 30px 0 18px;
+  background: #b5944540;
+  overflow: hidden;
+}
+.loading-track span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #e8c375;
+  box-shadow: 0 0 20px #e8c375;
+}
+.loading-caption {
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: #bba174;
+}
+.menu-shade {
+  background: linear-gradient(
+    0deg,
+    #0e0d06cf 0%,
+    #2117015c 48%,
+    #24170472 100%
+  );
+}
+@media (max-width: 1100px) {
+  .equipped-tool {
+    width: 265px;
+    height: 142px;
+    left: -8px;
+    bottom: -22px;
+    padding: 30px 25px;
+    gap: 16px;
+  }
+  .equipped-tool > svg {
+    width: 43px;
+    height: 43px;
+  }
+  .equipped-tool b {
+    font-size: 22px;
+  }
+  .equipped-tool small {
+    font-size: 9px;
+  }
+  .tool-station {
+    bottom: 100px;
+    padding: 13px 17px;
+  }
+  .station-copy {
+    min-width: 160px;
+  }
+  .station-copy h3 {
+    font-size: 18px;
   }
 }

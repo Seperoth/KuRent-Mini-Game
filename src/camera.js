@@ -6,8 +6,8 @@ export const CAMERA_STOPS = [
   { position: [0, 3.15, -22.5], target: [0, 2.65, -33.8], fov: 66 },
 ];
 export const MENU_CAMERA = {
-  position: [12, 8.3, 30],
-  target: [0, 3.1, 1],
+  position: [3, 6.8, 27],
+  target: [0, 3.5, 7],
   fov: 48,
 };
 const copy = (pose) => ({

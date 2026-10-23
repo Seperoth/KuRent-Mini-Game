@@ -6,6 +6,8 @@ import {
   readScores,
   saveScore,
   LIMIT,
+  graceForLevel,
+  leakRate,
 } from "../src/engine.js";
 
 const start = (random = () => 0.25) => {
@@ -13,6 +15,7 @@ const start = (random = () => 0.25) => {
   game.start();
   return game;
 };
+const spawnFirst = (game) => game.tick(game.state.nextFault - game.state.time);
 const firstFault = (game) => game.state.appliances.find((a) => a.fault);
 
 test("a new house has three randomized appliances in each indoor room", () => {
@@ -42,18 +45,18 @@ test("tools can only be swapped outside, and room movement stays inside the hous
   assert.equal(game.equip("gloves"), true);
 });
 
-test("a fault appears after the opening interval with a full 60-second grace period", () => {
+test("level 1 faults start in 10-12 seconds with a 20-second repair window", () => {
   const game = start();
-  game.tick(7);
+  game.tick(10);
   assert.equal(firstFault(game), undefined);
-  game.tick(1);
-  assert.equal(firstFault(game).fault.deadline, 68);
+  game.tick(0.5);
+  assert.equal(firstFault(game).fault.deadline, 30.5);
   assert.equal(game.state.bill, 0);
 });
 
 test("click repairs require gloves, the right room, and the full number of clicks", () => {
   const game = start();
-  game.tick(8);
+  spawnFirst(game);
   const item = firstFault(game);
   assert.equal(item.fault.method, "click");
   assert.equal(game.interact(item.id, "click"), "unavailable");
@@ -72,7 +75,7 @@ test("click repairs require gloves, the right room, and the full number of click
 
 test("hold repairs require pliers and reset if released or if the player changes floors", () => {
   const game = start(() => 0.9);
-  game.tick(8);
+  spawnFirst(game);
   const item = firstFault(game);
   assert.equal(item.fault.method, "hold");
   game.move(["outside", "living", "dining", "bedroom"].indexOf(item.room));
@@ -96,16 +99,16 @@ test("hold repairs require pliers and reset if released or if the player changes
   assert.equal(game.state.repaired, 1);
 });
 
-test("a fault adds exactly ₱1 per second only after its grace period", () => {
+test("a fault charges only after its deadline and uses the current level rate", () => {
   const game = start();
-  game.tick(8);
+  spawnFirst(game);
   game.state.nextFault = Infinity;
-  game.tick(59);
+  game.tick(19);
   assert.equal(game.state.bill, 0);
   game.tick(1);
   assert.equal(game.state.bill, 0);
   game.tick(2.5);
-  assert.equal(game.state.bill, 2.5);
+  assert.equal(game.state.bill, 15);
 });
 
 test("overdue faults accumulate independently and repairs stop future consumption", () => {
@@ -123,7 +126,7 @@ test("overdue faults accumulate independently and repairs stop future consumptio
   assert.equal(game.state.bill, 8);
 });
 
-test("the run ends exactly at the ₱20,000 limit", () => {
+test("the run ends exactly at the ₱5,000 limit", () => {
   const game = start();
   game.state.bill = LIMIT - 0.5;
   game.state.appliances[0].fault = {
@@ -142,37 +145,38 @@ test("the run ends exactly at the ₱20,000 limit", () => {
 
 test("pausing freezes the timer, consumption, fault generation, and repair progress", () => {
   const game = start();
-  game.tick(8);
+  spawnFirst(game);
   game.pause();
   game.tick(100);
-  assert.equal(game.state.time, 8);
+  assert.equal(game.state.time, 10.5);
   assert.equal(game.state.bill, 0);
   assert.equal(game.state.appliances.filter((a) => a.fault).length, 1);
   game.resume();
   game.tick(1);
-  assert.equal(game.state.time, 9);
+  assert.equal(game.state.time, 11.5);
 });
 
-test("difficulty increases every two minutes and new appliances cap at six per room", () => {
+test("difficulty increases every 30 seconds and new appliances cap at six per room", () => {
   const game = start();
-  game.tick(119);
+  game.state.nextFault = Infinity;
+  game.tick(29);
   assert.equal(game.state.level, 1);
   assert.equal(game.state.appliances.length, 9);
   game.tick(1);
   assert.equal(game.state.level, 2);
   assert.equal(game.state.appliances.length, 12);
-  game.tick(120);
+  game.tick(30);
   assert.equal(game.state.appliances.length, 15);
-  game.tick(120);
+  game.tick(30);
   assert.equal(game.state.appliances.length, 18);
-  game.tick(120);
+  game.tick(30);
   assert.equal(game.state.level, 5);
   assert.equal(game.state.appliances.length, 18);
 });
 
 test("early holds are shorter and late holds never exceed seven seconds", () => {
   const early = start(() => 0.9);
-  early.tick(8);
+  spawnFirst(early);
   assert.ok(
     firstFault(early).fault.required >= 3 &&
       firstFault(early).fault.required < 4,
@@ -183,6 +187,80 @@ test("early holds are shorter and late holds never exceed seven seconds", () => 
   assert.ok(
     firstFault(late).fault.required >= 6 &&
       firstFault(late).fault.required <= 7,
+  );
+});
+
+test("fault windows decrease by 1-2 seconds each level, with a two-second floor", () => {
+  const game = start(() => 0.25);
+  assert.equal(game.state.nextFault, 10.5);
+  game.state.nextFault = Infinity;
+  let previous = 0;
+  for (let level = 2; level <= 12; level++) {
+    game.tick(30);
+    assert.equal(game.state.level, level);
+    assert.ok(
+      game.state.faultReduction - previous >= 1 &&
+        game.state.faultReduction - previous <= 2,
+    );
+    previous = game.state.faultReduction;
+  }
+  game.state.nextFault = game.state.time;
+  game.tick(0.001);
+  assert.ok(
+    Math.abs(game.state.nextFault - (game.state.time - 0.001) - 2) < 1e-8,
+  );
+  assert.equal(firstFault(game).fault.deadline - (game.state.time - 0.001), 4);
+});
+
+test("repair windows fall by two seconds per level and stop at four seconds", () => {
+  assert.deepEqual(
+    [1, 2, 3, 4, 8, 9, 30].map(graceForLevel),
+    [20, 18, 16, 14, 6, 4, 4],
+  );
+});
+
+test("leak rates include the current level and each appliance's own overdue age", () => {
+  const item = { fault: { deadline: 5 } };
+  assert.equal(leakRate(item, 4.99, 1), 0);
+  assert.equal(leakRate(item, 5, 1), 1);
+  assert.equal(leakRate(item, 14.99, 1), 1);
+  assert.equal(leakRate(item, 15, 1), 3);
+  assert.equal(leakRate(item, 25, 2), 10);
+  assert.equal(leakRate({ fault: null }, 100, 8), 0);
+  const game = start();
+  game.state.nextFault = Infinity;
+  game.state.appliances[0].fault = {
+    method: "click",
+    deadline: 0,
+    progress: 0,
+    required: 1,
+  };
+  game.state.appliances[1].fault = {
+    method: "click",
+    deadline: 5,
+    progress: 0,
+    required: 1,
+  };
+  game.tick(20);
+  assert.equal(game.state.bill, 65);
+  game.tick(10);
+  assert.equal(game.state.bill, 155);
+  game.tick(10);
+  assert.equal(game.state.bill, 385);
+});
+
+test("large and small time steps charge the same leaks and stop at the exact loss time", () => {
+  const big = start(() => 0.25),
+    small = start(() => 0.25);
+  big.tick(200);
+  for (let i = 0; i < 2000; i++) small.tick(0.1);
+  assert.equal(big.state.status, "over");
+  assert.equal(big.state.bill, 5000);
+  assert.ok(Math.abs(big.state.time - small.state.time) < 1e-6);
+  assert.equal(big.state.level, small.state.level);
+  assert.equal(
+    big.state.appliances.filter((a) => a.fault).length,
+    small.state.appliances.filter((a) => a.fault).length,
   );
 });
 

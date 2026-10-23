@@ -1,6 +1,6 @@
 # KuRent 0.0.2 — Windows desktop application
 
-A home-maintenance survival game with an amber woodland theme, an illustrated menu, and furnished 3D rooms. Move through the house with a forward-facing camera: **outside → living room → dining room → bedroom**.
+A home-maintenance survival game with an amber woodland theme, a live 3D house menu, and furnished 3D rooms. Move through the house with a forward-facing camera: **outside → living room → dining room → bedroom**.
 
 ## Play the application
 
@@ -14,13 +14,16 @@ The installer is a local unsigned build; no code-signing certificate is configur
 
 ## Controls and game rules
 
-- **W / Up:** glide forward to the next room. **S / Down:** glide back toward the outside. The house map also switches rooms.
-- Choose **pliers** or **gloves** at the outside tool station. Carry one tool at a time; return outside to swap.
+- **W:** glide forward to the next room. **S:** glide back toward the outside. These are the only room movement controls; the right-side house map displays room status.
+- Choose **pliers** or **gloves** at the table in front of the outside door. Both tools are modeled on the table. Carry one tool at a time; return outside to swap. A large arc-shaped dock shows the equipped tool.
+- **Start** transitions from the live 3D house menu to a **three-second loading screen**. The survival clock starts afterward.
 - **Pliers:** hold an amber appliance continuously for the displayed time, initially 3–4 seconds and increasing toward 7 seconds. Releasing, changing rooms, or pausing resets an unfinished hold. Keyboard players can focus an appliance and hold Space.
 - **Gloves:** click an amber appliance repeatedly for its displayed number of taps.
-- Each indoor room starts with **3 random appliances**. New faults have a **60-second grace period**. Afterward, each unresolved fault adds **₱1 per second**. Repairing stops future consumption.
-- Survive without excess consumption reaching **₱20,000**.
-- Every **2 minutes**, faults arrive faster, repairs take more work, and each indoor room gains an appliance until it has six. Difficulty continues increasing afterward.
+- Each indoor room starts with **3 random appliances**. Level 1 faults arrive every **10–12 seconds**. Each new level reduces the interval range by a random **1–2 seconds**, down to **2 seconds**.
+- New faults have **20 seconds** to repair at level 1, reduced by **2 seconds per level**, down to **4 seconds**. Existing faults keep the deadline assigned when they appeared.
+- Each overdue appliance starts at **₱1/sec**, plus **₱5/sec for every level after level 1**. Every **10 seconds that appliance remains overdue** adds another **₱2/sec** to its leak. The current level applies to all leaking appliances; overdue age is tracked separately for each appliance. Repairing stops its leak and resets that age.
+- Survive without excess consumption reaching **₱5,000**.
+- Every **30 seconds**, faults arrive faster, repairs take more work, and each indoor room gains an appliance until it has six (at 1:30). Difficulty continues increasing afterward.
 - **Escape:** pause or resume. **F11:** toggle full screen in the desktop application. Hiding the application pauses the run.
 - The pause menu can finish a run early and save it. The **10 longest runs** are saved locally in the desktop application's profile. Browser development previews keep a separate leaderboard.
 - **Exit** on the main menu closes the desktop application.
@@ -40,13 +43,13 @@ npm run desktop
 - `npm run build` creates the offline renderer in `dist/`.
 - `npm run package` builds the Windows x64 NSIS installer and unpacked application.
 - `npm test` checks gameplay rules, camera motion, and appliance placement against the actual 3D furniture geometry.
-- `npm run test:desktop` runs a hidden native application test against the built `file://` renderer. It checks the menu, native bridge isolation, room navigation, pause, and saved leaderboard. It also advances the real game loop until all 18 appliances need attention, then checks six targets and separated repair labels per room at 1440×900 and 1024×650. Reports and screenshots are written to `artifacts/`. Running the unpacked application's executable with `--smoke-test` performs the same checks against the packaged renderer and writes the report to `%TEMP%/kurent-packaged-check/`.
+- `npm run test:desktop` runs a hidden native application test against the built `file://` renderer. It checks the 3D menu, three-second loading transition, native bridge isolation, keyboard-only room navigation, pause, and saved leaderboard. It also advances the real game loop to six appliances per room, then checks all targets and repair labels at 1440×900 and 1024×650. Reports and screenshots are written to `artifacts/`. Running the unpacked application's executable with `--smoke-test` performs the same checks against the packaged renderer and writes the report to `%TEMP%/kurent-packaged-check/`.
 
 For additional browser interaction checks, run the development server, open `/tests/browser.html`, and click **Run browser checks**. These use deterministic faults, isolated in-memory storage, and an accelerated clock. Test pages are excluded from the production build.
 
 ## Visual direction
 
-The supplied menu reference establishes the centered white **KURENT** title, stacked **START / LEADERBOARD / EXIT** options, illustrated woodland home, deep brown overlay, and translucent amber ribbons. This palette and typography continue through the HUD, tool station, repair indicators, leaderboard, pause screen, and results.
+The supplied menu reference establishes the centered white **KURENT** title, stacked **START / LEADERBOARD / EXIT** options, deep brown overlay, and translucent amber ribbons. The menu now looks toward the same 3D house used in gameplay. This palette and typography continue through the HUD, loading screen, tool station, repair indicators, leaderboard, pause screen, and results.
 
 [The user-supplied Airplane Chefs video](https://www.youtube.com/watch?v=uC3Mmml-Cjc) informs the forward-facing perspective and smooth camera travel between viewpoints. House artwork, models, rooms, and repair gameplay are original code-native assets.
 
@@ -57,7 +60,7 @@ The supplied menu reference establishes the centered white **KURENT** title, sta
 - `src/camera.js`: smooth camera travel, interrupted transitions, and reduced motion.
 - `src/world.js` and `src/models.js`: Three.js house, lighting, and appliances.
 - `src/room-layout.js`, `src/furniture.js`, and `src/placement.js`: room-specific furniture and appliance locations, support heights, and overlap/visibility checks.
-- `src/menu-house.svg`: original flat house illustration.
+- `src/tool-station.js`: outside table and 3D pliers/gloves models.
 - `src/main.js` and `src/style.css`: menu, controls, HUD, and game screens.
 
 Renderer code has no Node.js access. The application uses context isolation, sandboxing, a content security policy, and blocked external navigation. Native bridge methods only close the application and toggle its full-screen view.
