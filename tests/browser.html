@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>KuRent — browser interaction checks</title>
+    <style>
+      body {
+        font: 14px system-ui;
+        background: #f7f8f2;
+        color: #244237;
+        margin: 25px;
+      }
+      h1 {
+        font-size: 24px;
+      }
+      button {
+        background: #244237;
+        color: #fff;
+        padding: 12px 22px;
+        border: 0;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      li {
+        margin: 9px 0;
+      }
+      .pass {
+        color: #3d7838;
+      }
+      .fail {
+        color: #b24435;
+      }
+      iframe {
+        width: 100%;
+        height: 710px;
+        border: 1px solid #ccc;
+        border-radius: 9px;
+        margin-top: 18px;
+      }
+      p {
+        color: #7a876e;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>KuRent browser interaction checks</h1>
+    <p>
+      Isolated storage, deterministic faults, accelerated game clock. Production
+      gameplay is unchanged.
+    </p>
+    <button id="run">Run browser checks</button>
+    <ol id="results"></ol>
+    <iframe id="game" title="Game under test"></iframe>
+    <script type="module">
+      const results = document.querySelector("#results");
+      const frame = document.querySelector("#game");
+      const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const check = (ok, message) => {
+        const row = document.createElement("li");
+        row.className = ok ? "pass" : "fail";
+        row.textContent = `${ok ? "PASS" : "FAIL"} — ${message}`;
+        results.append(row);
+        if (!ok) throw new Error(message);
+      };
+      const load = (method) =>
+        new Promise((resolve) => {
+          frame.onload = () => resolve(frame.contentWindow);
+          frame.src = `/tests/fixture.html?method=${method}`;
+        });
+      const waitUntil = async (fn) => {
+        for (let i = 0; i < 450; i++) {
+          if (fn()) return;
+          await delay(100);
+        }
+        throw new Error("Timed out waiting for the game");
+      };
+      document.querySelector("#run").onclick = async () => {
+        const runButton = document.querySelector("#run");
+        runButton.disabled = true;
+        results.replaceChildren();
+        try {
+          let win = await load("click");
+          let doc = win.document;
+          doc.querySelector('[data-action="start"]').click();
+          check(
+            doc.querySelector("#current-room").textContent === "Outside",
+            "Start puts the player outside.",
+          );
+          doc.querySelector('[data-tool="pliers"]').click();
+          doc.dispatchEvent(
+            new win.KeyboardEvent("keydown", { key: "w", bubbles: true }),
+          );
+          check(
+            doc.querySelector("#current-room").textContent === "Living room",
+            "W travels forward into the house with the selected tool.",
+          );
+          doc.dispatchEvent(
+            new win.KeyboardEvent("keydown", { key: "s", bubbles: true }),
+          );
+          check(
+            doc.querySelector("#current-room").textContent === "Outside",
+            "S travels back toward the outside.",
+          );
+          await waitUntil(() => doc.querySelector(".faulty"));
+          let fault = doc.querySelector(".faulty");
+          let room = fault.closest("[data-room]").dataset.room;
+          let roomIndex = ["outside", "living", "dining", "bedroom"].indexOf(
+            room,
+          );
+          doc.querySelector(`[data-room-index="${roomIndex}"]`).click();
+          fault.click();
+          check(
+            doc.querySelector("#toast").textContent.includes("needs gloves"),
+            "A repair rejects the wrong tool and explains what is needed.",
+          );
+          doc.querySelector('[data-action="go-outside"]').click();
+          doc.querySelector('[data-tool="gloves"]').click();
+          doc.querySelector(`[data-room-index="${roomIndex}"]`).click();
+          let id = fault.dataset.appliance;
+          for (let i = 0; i < 6; i++)
+            doc.querySelector(`[data-appliance="${id}"]`).click();
+          check(
+            !doc
+              .querySelector(`[data-appliance="${id}"]`)
+              .classList.contains("faulty"),
+            "Six glove clicks complete an early repair.",
+          );
+          doc.querySelector('[data-action="pause"]').click();
+          const pausedTime = doc.querySelector("#timer").textContent;
+          await delay(400);
+          check(
+            doc.querySelector("#timer").textContent === pausedTime,
+            "Pause freezes the survival timer.",
+          );
+          doc.querySelector('[data-action="quit"]').click();
+          doc.querySelector('[data-action="finish"]').click();
+          check(
+            doc.querySelector("#dialog-title").textContent ===
+              "You kept things running.",
+            "Ending a run shows its result.",
+          );
+          doc
+            .querySelector('.result-links [data-action="leaderboard"]')
+            .click();
+          check(
+            doc.querySelectorAll(".score-row").length === 1,
+            "The leaderboard saves and displays the completed run.",
+          );
+
+          win = await load("hold");
+          doc = win.document;
+          doc.querySelector('[data-action="start"]').click();
+          doc.querySelector('[data-tool="pliers"]').click();
+          await waitUntil(() => doc.querySelector(".faulty"));
+          fault = doc.querySelector(".faulty");
+          id = fault.dataset.appliance;
+          room = fault.closest("[data-room]").dataset.room;
+          roomIndex = ["outside", "living", "dining", "bedroom"].indexOf(room);
+          doc.querySelector(`[data-room-index="${roomIndex}"]`).click();
+          fault.dispatchEvent(
+            new win.PointerEvent("pointerdown", { button: 0, bubbles: true }),
+          );
+          await delay(140);
+          doc.dispatchEvent(
+            new win.PointerEvent("pointerup", { bubbles: true }),
+          );
+          await delay(120);
+          check(
+            doc.querySelector(`[data-appliance="${id}"] .repair-track > span`)
+              .style.width === "0%",
+            "Releasing a hold early resets its repair progress.",
+          );
+          fault = doc.querySelector(`[data-appliance="${id}"]`);
+          fault.dispatchEvent(
+            new win.PointerEvent("pointerdown", { button: 0, bubbles: true }),
+          );
+          await waitUntil(
+            () =>
+              !doc
+                .querySelector(`[data-appliance="${id}"]`)
+                .classList.contains("faulty"),
+          );
+          doc.dispatchEvent(
+            new win.PointerEvent("pointerup", { bubbles: true }),
+          );
+          check(true, "Holding with pliers completes the repair.");
+          await waitUntil(
+            () => doc.querySelector("#level-label").textContent === "LEVEL 02",
+          );
+          check(
+            doc.querySelector("#appliance-count").textContent ===
+              "12 appliances",
+            "Two minutes of gameplay adds an appliance in every indoor room.",
+          );
+          doc.querySelector('[data-action="pause"]').click();
+          const done = document.createElement("h2");
+          done.id = "all-passed";
+          done.textContent = "All 11 browser interaction checks passed.";
+          results.after(done);
+        } catch (error) {
+          const row = document.createElement("li");
+          row.className = "fail";
+          row.textContent = error.message;
+          results.append(row);
+        }
+        runButton.disabled = false;
+      };
+    </script>
+  </body>
+</html>

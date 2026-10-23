@@ -1,0 +1,28 @@
+{
+  "name": "kurent-mini-game",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "desktop/main.cjs",
+  "description": "KuRent — a cinematic home-maintenance survival game",
+  "author": "KuRent",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test tests/*.test.js",
+    "start": "electron .",
+    "desktop": "npm run build && electron .",
+    "package": "npm run build && electron-builder --win --x64",
+    "test:desktop": "npm run build && electron . --smoke-test"
+  },
+  "devDependencies": {
+    "@fontsource/anton": "^5.3.0",
+    "@fontsource/barlow-condensed": "^5.3.0",
+    "@fontsource/montserrat": "^5.3.0",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3",
+    "three": "^0.186.1",
+    "vite": "^7.1.0"
+  }
+}

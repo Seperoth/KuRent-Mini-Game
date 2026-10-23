@@ -1,0 +1,30 @@
+appId: com.kurent.game
+productName: KuRent
+electronDist: node_modules/electron/dist
+copyright: Copyright © 2026 KuRent
+directories:
+  output: release
+  buildResources: assets
+files:
+  - dist/**/*
+  - desktop/main.cjs
+  - desktop/preload.cjs
+  - assets/icon.ico
+  - package.json
+asar: true
+win:
+  icon: assets/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: KuRent-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: KuRent
+  uninstallDisplayName: KuRent
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
