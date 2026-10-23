@@ -115,6 +115,63 @@ app.whenReady().then(async () => {
     (await win.webContents.executeJavaScript(
       `document.querySelector('#timer').textContent`,
     ));
+  await win.webContents.executeJavaScript(`
+    document.querySelector('[data-action="close-dialog"]').click();
+    // Accelerate only this hidden test, through the real game loop and progression.
+    (() => {
+      const nativeRAF = window.requestAnimationFrame.bind(window);
+      let previous = performance.now(), clock = previous;
+      window.__smokeRate = 100;
+      window.requestAnimationFrame = callback => nativeRAF(now => {
+        clock += (now - previous) * window.__smokeRate;
+        previous = now;
+        callback(clock);
+      });
+    })();
+  `);
+  let fullRoster = false;
+  for (let attempt = 0; attempt < 55; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    fullRoster = await win.webContents.executeJavaScript(
+      `document.querySelectorAll('[data-appliance]').length === 18 && document.querySelectorAll('.faulty').length === 18`,
+    );
+    if (fullRoster) break;
+  }
+  await win.webContents.executeJavaScript(`window.__smokeRate = 1`);
+  const fullRoomChecks = [];
+  for (const width of [1440, 1024]) {
+    win.setSize(width, width === 1440 ? 900 : 650);
+    for (let room = 1; room < 4; room++) {
+      await win.webContents.executeJavaScript(
+        `document.querySelector('[data-room-index="${room}"]').click()`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 1250));
+      fullRoomChecks.push(
+        await win.webContents.executeJavaScript(`({
+        room: document.querySelector('#current-room').textContent,
+        width: innerWidth,
+        height: innerHeight,
+        placementIssues: document.body.dataset.placementIssues,
+        labels: [...document.querySelectorAll('.room-task-group:not([hidden]) .task-tag')].map(el => {
+          const r = el.getBoundingClientRect();
+          return {x:r.x, y:r.y, width:r.width, height:r.height};
+        }),
+        targets: [...document.querySelectorAll('.room-task-group:not([hidden]) .appliance-button')].map(el => ({
+          visible: !el.classList.contains('out-of-view'),
+          x: el.getBoundingClientRect().x,
+          y: el.getBoundingClientRect().y,
+        })),
+      })`),
+      );
+      fs.writeFileSync(
+        path.join(artifactDir, "desktop-full-" + width + "-" + room + ".png"),
+        (await win.webContents.capturePage()).toPNG(),
+      );
+    }
+  }
+  await win.webContents.executeJavaScript(
+    `document.querySelector('#pause-button').click()`,
+  );
   await win.webContents.executeJavaScript(
     `document.querySelector('[data-action="quit"]').click();document.querySelector('[data-action="finish"]').click();document.querySelector('.result-links [data-action="leaderboard"]').click();`,
   );
@@ -129,10 +186,33 @@ app.whenReady().then(async () => {
           r.hotspots.every((h) => h.visible && h.x > 0 && h.y > 80) &&
           new Set(r.hotspots.map((h) => Math.round(h.x))).size === 3)),
   );
+  const labelsValid = fullRoomChecks.every((room) =>
+    room.labels.every(
+      (a, index) =>
+        a.x >= 0 &&
+        a.x + a.width <= room.width &&
+        a.y > 100 &&
+        a.y + a.height < room.height - 80 &&
+        room.labels
+          .slice(index + 1)
+          .every(
+            (b) =>
+              !(
+                a.x < b.x + b.width &&
+                a.x + a.width > b.x &&
+                a.y < b.y + b.height &&
+                a.y + a.height > b.y
+              ),
+          ),
+    ),
+  );
   const report = {
     ...initial,
     roomChecks,
     paused,
+    fullRoster,
+    fullRoomChecks,
+    labelsValid,
     saved,
     errors,
     passed:
@@ -143,6 +223,14 @@ app.whenReady().then(async () => {
       errors.length === 0 &&
       roomsValid &&
       paused &&
+      fullRoster &&
+      labelsValid &&
+      fullRoomChecks.every(
+        (r) =>
+          r.placementIssues === "0" &&
+          r.targets.length === 6 &&
+          r.targets.every((t) => t.visible),
+      ) &&
       saved,
   };
   fs.writeFileSync(

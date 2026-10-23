@@ -867,11 +867,13 @@ kbd {
   position: absolute;
   bottom: 100%;
   left: 50%;
-  transform: translateX(-50%);
-  display: flex;
+  transform: translate(calc(-50% + var(--label-x, 0px)), var(--label-y, 0px));
+  display: grid;
+  grid-template-columns: auto auto auto;
   align-items: center;
   white-space: nowrap;
   gap: 9px;
+  row-gap: 4px;
   background: linear-gradient(100deg, #433014f0, #30230df0);
   border: 1px solid #d1a254bd;
   padding: 11px 12px;
@@ -880,6 +882,36 @@ kbd {
   letter-spacing: 1.1px;
   box-shadow: 0 3px 15px #170e002b;
   pointer-events: none;
+}
+.task-title {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  letter-spacing: 0.7px;
+  text-align: left;
+  color: #f3e2bc;
+}
+.faulty .appliance-name {
+  display: none;
+}
+.label-leader {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+}
+.label-leader line {
+  stroke: #e1b96c;
+  stroke-width: 1;
+}
+.shifted-tag .label-leader {
+  opacity: 0.75;
+}
+.shifted-tag .task-tag:after {
+  display: none;
 }
 .task-tag:after {
   content: "";

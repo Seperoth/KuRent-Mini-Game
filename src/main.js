@@ -1,3 +1,4 @@
+import { arrangeLabels } from "./label-layout.js";
 import "@fontsource/montserrat/latin-900.css";
 import "@fontsource/anton/latin-400.css";
 import "@fontsource/barlow-condensed/latin-400.css";
@@ -75,6 +76,7 @@ $("#app").innerHTML = `
 `;
 
 if (window.kurent?.desktop) document.body.classList.add("desktop");
+let labelLayoutKey = "";
 const world = new HouseWorld($("#house-canvas"), (points, moving) => {
   $("#appliance-layers").classList.toggle("camera-moving", moving);
   for (const point of points) {
@@ -85,7 +87,78 @@ const world = new HouseWorld($("#house-canvas"), (points, moving) => {
     el.style.setProperty("--distance-scale", point.scale);
     el.classList.toggle("out-of-view", !point.visible);
   }
+  if (!moving) positionRepairLabels(points);
 });
+
+function positionRepairLabels(points) {
+  const labels = points
+    .filter((point) => point.visible)
+    .flatMap((point) => {
+      const el = $(`[data-appliance="${point.id}"]`),
+        tag = el?.querySelector(".task-tag");
+      if (!tag) return [];
+      const width = tag.offsetWidth * point.scale,
+        height = tag.offsetHeight * point.scale;
+      return [
+        {
+          ...point,
+          el,
+          tag,
+          width,
+          height,
+          x: point.x - width / 2,
+          y: point.y - (el.offsetHeight * point.scale) / 2 - height,
+          anchorX: point.x,
+          anchorY: point.y,
+        },
+      ];
+    });
+  const area = $("#appliance-layers").getBoundingClientRect();
+  const key = JSON.stringify([
+    area.width,
+    area.height,
+    labels.map(({ id, x, y, width, height }) => [id, x, y, width, height]),
+  ]);
+  if (key === labelLayoutKey) return;
+  labelLayoutKey = key;
+  const reserved = [".game-top", ".room-heading", ".house-map"].map(
+    (selector) => {
+      const r = $(selector).getBoundingClientRect();
+      return {
+        x: r.x - area.x,
+        y: r.y - area.y,
+        width: r.width,
+        height: r.height,
+      };
+    },
+  );
+  const placed = arrangeLabels(
+    labels,
+    { width: area.width, height: area.height },
+    reserved,
+  );
+  for (const label of placed) {
+    const original = labels.find((item) => item.id === label.id);
+    const dx = label.x - original.x,
+      dy = label.y - original.y;
+    label.tag.style.setProperty("--label-x", `${dx / label.scale}px`);
+    label.tag.style.setProperty("--label-y", `${dy / label.scale}px`);
+    label.el.classList.toggle("shifted-tag", Math.abs(dx) + Math.abs(dy) > 2);
+    const line = label.el.querySelector(".label-leader line");
+    line.setAttribute(
+      "x2",
+      (Math.max(label.x, Math.min(label.x + label.width, label.anchorX)) -
+        label.anchorX) /
+        label.scale,
+    );
+    line.setAttribute(
+      "y2",
+      (Math.max(label.y, Math.min(label.y + label.height, label.anchorY)) -
+        label.anchorY) /
+        label.scale,
+    );
+  }
+}
 
 function tone(type) {
   if (!soundEnabled) return;
@@ -124,6 +197,7 @@ function toast(message, mood = "") {
   toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), 3300);
 }
 function renderAppliances() {
+  labelLayoutKey = "";
   const state = game.state;
   world.sync(state.appliances);
   for (const room of ROOMS.slice(1)) {
@@ -131,7 +205,7 @@ function renderAppliances() {
       .filter((a) => a.room === room)
       .map(
         (item) =>
-          `<button class="appliance-button ${item.fault ? "faulty" : ""}" data-appliance="${item.id}" aria-label="${item.name}${item.fault ? `, needs ${item.fault.method === "hold" ? "pliers, hold" : "gloves, click"} to repair` : ", working normally"}"><span class="target-corners"></span><span class="appliance-name">${item.name}</span>${item.fault ? `<span class="task-tag">${icon(item.fault.method === "hold" ? "pliers" : "gloves", 18)}<span class="task-action">${item.fault.method === "hold" ? `HOLD ${item.fault.required.toFixed(1)}s` : `TAP ${item.fault.required}×`}</span><span class="task-countdown"></span></span><span class="repair-track"><span></span></span>` : ""}</button>`,
+          `<button class="appliance-button ${item.fault ? "faulty" : ""}" data-appliance="${item.id}" aria-label="${item.name}${item.fault ? `, needs ${item.fault.method === "hold" ? "pliers, hold" : "gloves, click"} to repair` : ", working normally"}"><span class="target-corners"></span><span class="appliance-name">${item.name}</span>${item.fault ? `<svg class="label-leader" aria-hidden="true"><line x1="0" y1="0" x2="0" y2="0"/></svg><span class="task-tag"><span class="task-title">${item.name}</span>${icon(item.fault.method === "hold" ? "pliers" : "gloves", 18)}<span class="task-action">${item.fault.method === "hold" ? `HOLD ${item.fault.required.toFixed(1)}s` : `TAP ${item.fault.required}×`}</span><span class="task-countdown"></span></span><span class="repair-track"><span></span></span>` : ""}</button>`,
       )
       .join("");
   }

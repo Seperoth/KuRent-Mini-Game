@@ -1,10 +1,12 @@
-# KuRent 0.0.1 — Windows desktop application
+# KuRent 0.0.2 — Windows desktop application
 
 A home-maintenance survival game with an amber woodland theme, an illustrated menu, and furnished 3D rooms. Move through the house with a forward-facing camera: **outside → living room → dining room → bedroom**.
 
 ## Play the application
 
-Build the installer with `npm run package`. The output is **`release/KuRent-Setup-0.0.1.exe`**. It installs KuRent for the current Windows user and creates Start Menu and desktop shortcuts. `release/win-unpacked/KuRent.exe` runs the application directly from its unpacked folder; keep that folder's files together.
+Build the installer with `npm run package`. The output is **`release/KuRent-Setup-0.0.2.exe`**. It installs KuRent for the current Windows user and creates Start Menu and desktop shortcuts. `release/win-unpacked/KuRent.exe` runs the application directly from its unpacked folder; keep that folder's files together.
+
+Version 0.0.2 fixes overlapping room furniture and appliances. Each appliance type has a reserved floor, counter, desk, or wall location appropriate to its size. All six locations in every room are checked together for intersections, support fit, and visibility from the room camera. Random starting rosters and later additions use these same locations. Repair labels include the appliance name and move apart when crowded, with a connector pointing to the appliance. The original 0.0.1 source checkpoint and installer remain available.
 
 The installed application works offline. All artwork, 3D models, fonts, game code, and sound effects are included. No web server, browser, account, or Node.js installation is needed to play.
 
@@ -37,8 +39,8 @@ npm run desktop
 - `npm run dev` serves a browser development preview.
 - `npm run build` creates the offline renderer in `dist/`.
 - `npm run package` builds the Windows x64 NSIS installer and unpacked application.
-- `npm test` checks gameplay rules and camera motion.
-- `npm run test:desktop` runs a hidden native application test against the built `file://` renderer. It checks the menu, native bridge isolation, room navigation, projected appliance targets, pause, and saved leaderboard. Reports and screenshots are written to `artifacts/`.
+- `npm test` checks gameplay rules, camera motion, and appliance placement against the actual 3D furniture geometry.
+- `npm run test:desktop` runs a hidden native application test against the built `file://` renderer. It checks the menu, native bridge isolation, room navigation, pause, and saved leaderboard. It also advances the real game loop until all 18 appliances need attention, then checks six targets and separated repair labels per room at 1440×900 and 1024×650. Reports and screenshots are written to `artifacts/`. Running the unpacked application's executable with `--smoke-test` performs the same checks against the packaged renderer and writes the report to `%TEMP%/kurent-packaged-check/`.
 
 For additional browser interaction checks, run the development server, open `/tests/browser.html`, and click **Run browser checks**. These use deterministic faults, isolated in-memory storage, and an accelerated clock. Test pages are excluded from the production build.
 
@@ -53,7 +55,8 @@ The supplied menu reference establishes the centered white **KURENT** title, sta
 - `desktop/`: Electron main process and narrowly scoped, isolated preload bridge.
 - `src/engine.js`: survival and repair rules, independent of rendering.
 - `src/camera.js`: smooth camera travel, interrupted transitions, and reduced motion.
-- `src/world.js` and `src/models.js`: Three.js house, furniture, lighting, and appliances.
+- `src/world.js` and `src/models.js`: Three.js house, lighting, and appliances.
+- `src/room-layout.js`, `src/furniture.js`, and `src/placement.js`: room-specific furniture and appliance locations, support heights, and overlap/visibility checks.
 - `src/menu-house.svg`: original flat house illustration.
 - `src/main.js` and `src/style.css`: menu, controls, HUD, and game screens.
 

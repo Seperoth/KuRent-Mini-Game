@@ -1,27 +1,18 @@
 import * as THREE from "three";
 import { HouseCamera } from "./camera.js";
 import {
-  applianceModel,
   box,
   cylinder,
   sphere,
   plant,
-  cabinet,
   table,
-  book,
   material,
   palette as P,
 } from "./models.js";
 
-const ROOM_Z = { living: 0, dining: -14, bedroom: -28 };
-const SLOTS = [
-  [-4.7, -0.5],
-  [4.7, -0.5],
-  [4.7, -5.1],
-  [-4.7, -5.1],
-  [-2.6, -5.4],
-  [2.6, -5.4],
-];
+import { ROOM_Z } from "./room-layout.js";
+import { createRoomFixtures } from "./furniture.js";
+import { createPlacedAppliance, auditPlacements } from "./placement.js";
 
 function floorTexture(checkered = false) {
   const canvas = document.createElement("canvas");
@@ -181,14 +172,6 @@ function makeRoomShell(group, room) {
   ceilingLamp(group, -4.1, "green");
   windowFrame(group, -6.82, 3.25, -2, Math.PI / 2);
   windowFrame(group, 6.82, 3.25, -3.3, -Math.PI / 2);
-  group.userData.pedestals = [];
-  for (const [i, [x, z]] of SLOTS.entries()) {
-    const pedestal = new THREE.Group();
-    pedestal.position.set(x, 0, z);
-    group.add(pedestal);
-    cabinet(pedestal, 0, 0, i >= 4 ? 1.35 : 1.9, 1.0, 1.4);
-    group.userData.pedestals.push(pedestal);
-  }
   wallPicture(
     group,
     -4.6,
@@ -197,140 +180,6 @@ function makeRoomShell(group, room) {
     room === "bedroom" ? "#6f7660" : "#826843",
   );
   wallPicture(group, 4.6, -6.81, 0, "#7c8250");
-}
-
-function livingFurniture(g) {
-  const sofa = new THREE.Group();
-  sofa.position.set(-5, 0, -3);
-  sofa.rotation.y = Math.PI / 2;
-  g.add(sofa);
-  box(sofa, 3.6, 0.55, 1.35, 0, 0.6, 0, "#6e7651", 0.17);
-  box(sofa, 3.6, 1.45, 0.32, 0, 1.15, -0.65, "#7d835d", 0.15);
-  for (const side of [-1, 1]) {
-    box(sofa, 0.3, 0.8, 1.55, side * 1.8, 0.95, 0, "#8e9369", 0.13);
-    box(sofa, 1.65, 0.2, 1.18, side * 0.86, 0.94, 0.03, "#93956c", 0.12);
-    const pillow = box(
-      sofa,
-      0.68,
-      0.68,
-      0.18,
-      side * 1.02,
-      1.4,
-      -0.38,
-      side < 0 ? "#bf914e" : "#c8b38a",
-      0.12,
-    );
-    pillow.rotation.z = side * 0.2;
-    for (const end of [-1, 1])
-      cylinder(sofa, 0.07, 0.06, 0.4, side * 1.5, 0.2, end * 0.5, P.walnut, 8);
-  }
-  box(g, 3.3, 0.025, 4.6, -2.6, 0.015, -2.5, "#b29761", 0.04);
-  box(g, 2.96, 0.03, 4.25, -2.6, 0.03, -2.5, "#9e8051", 0.03);
-  table(g, -2.5, -2.3, 2.5, 1.45, 0.85, "#b58a55");
-  book(g, -2.8, 0.98, -2.4, "#66734e", 0.17);
-  book(g, -2.1, 1, -2.4, "#ad7543", -0.12);
-  cylinder(g, 0.13, 0.1, 0.2, -2.2, 1.04, -1.95, "#e2cf9c");
-  plant(g, 5.45, -3.2, 1.45);
-  const shelf = new THREE.Group();
-  shelf.position.set(5.95, 0, -5.5);
-  shelf.rotation.y = -Math.PI / 2;
-  g.add(shelf);
-  box(shelf, 1.8, 3.1, 0.75, 0, 1.55, 0, P.walnut, 0.02);
-  for (let i = 0; i < 4; i++) {
-    box(shelf, 1.65, 0.1, 0.8, 0, 0.25 + i * 0.73, 0.05, P.oak);
-    for (let j = 0; j < 5; j++)
-      box(
-        shelf,
-        0.17,
-        0.48 + (j % 2) * 0.08,
-        0.42,
-        -0.6 + j * 0.25,
-        0.55 + i * 0.73,
-        0.13,
-        ["#ad854b", "#73805c", "#b89b68"][j % 3],
-      );
-  }
-}
-
-function diningFurniture(g) {
-  table(g, -3.6, -3.1, 3.9, 2.6, 1.58, "#bd9359");
-  for (const z of [-4.9, -1.3])
-    for (const x of [-4.5, -2.7]) {
-      box(g, 0.92, 0.12, 0.9, x, 0.88, z, "#967744", 0.05);
-      box(
-        g,
-        0.92,
-        1.25,
-        0.12,
-        x,
-        1.45,
-        z + (z < -3 ? -0.4 : 0.4),
-        "#a8844e",
-        0.05,
-      );
-      for (const side of [-1, 1])
-        for (const end of [-1, 1])
-          box(
-            g,
-            0.08,
-            0.85,
-            0.08,
-            x + side * 0.34,
-            0.43,
-            z + end * 0.32,
-            P.walnut,
-          );
-    }
-  for (const x of [-4.4, -2.8]) {
-    cylinder(g, 0.34, 0.34, 0.035, x, 1.69, -3.1, "#e2d0a0");
-    cylinder(g, 0.24, 0.24, 0.04, x, 1.715, -3.1, "#eee1bc");
-    cylinder(g, 0.095, 0.075, 0.22, x + 0.45, 1.8, -3.1, "#b5bf9a", 18);
-  }
-  cylinder(g, 0.2, 0.25, 0.45, -3.6, 1.87, -3.1, "#b98b53");
-  plant(g, -3.6, -3.1, 0.44, 2.1);
-  const shelf = new THREE.Group();
-  shelf.position.set(6.1, 0, -3.6);
-  shelf.rotation.y = -Math.PI / 2;
-  g.add(shelf);
-  cabinet(shelf, 0, 0, 2.1, 1.0, 1.5, "#65704b");
-  box(shelf, 1.4, 0.08, 0.55, 0, 1.59, 0.1, "#495443", 0.1);
-  cylinder(shelf, 0.045, 0.045, 0.6, 0.36, 1.9, -0.1, P.brass).rotation.z = 0.3;
-  box(shelf, 2.1, 0.8, 0.45, 0, 3.65, -0.3, "#7c8259", 0.05);
-  plant(g, 5.7, 3.1, 1.35);
-}
-
-function bedroomFurniture(g) {
-  // The last room ends at a closed timber door rather than an empty corridor.
-  box(g, 3.15, 4.55, 0.16, 0, 2.28, -6.87, "#876441", 0.025);
-  for (const side of [-1, 1]) {
-    box(g, 1.27, 1.65, 0.05, side * 0.75, 3.18, -6.75, "#99744b", 0.02);
-    box(g, 1.27, 1.65, 0.05, side * 0.75, 1.17, -6.75, "#99744b", 0.02);
-  }
-  sphere(g, 0.075, 1.13, 2.1, -6.68, "#c7a45d");
-  box(g, 4.15, 0.2, 5.0, -3.45, 0.3, -3.6, P.walnut, 0.07);
-  box(g, 3.95, 0.42, 4.8, -3.45, 0.65, -3.6, "#ded0af", 0.18);
-  box(g, 4.3, 2.2, 0.25, -3.45, 1.2, -6.05, "#89623f", 0.16);
-  box(g, 3.91, 0.22, 3.4, -3.45, 0.95, -2.95, "#a29158", 0.12);
-  box(g, 1.55, 0.18, 3.42, -3.2, 1.07, -2.95, "#c6ac6d", 0.06);
-  for (const x of [-4.45, -2.5])
-    box(g, 1.7, 0.28, 0.93, x, 1.02, -5.3, "#e1d2ad", 0.17);
-  box(g, 4.5, 0.03, 5.4, -3.45, 0.03, -3.45, "#917c55", 0.04);
-  const desk = new THREE.Group();
-  desk.position.set(5.7, 0, -3.4);
-  desk.rotation.y = -Math.PI / 2;
-  g.add(desk);
-  table(desk, 0, 0, 2.4, 1.3, 1.5, "#a37c4b");
-  book(desk, -0.7, 1.65, 0, "#72805b");
-  box(desk, 0.9, 0.12, 0.8, 0, 0.8, 1.35, "#7d7651", 0.07);
-  box(desk, 0.9, 1.2, 0.15, 0, 1.35, 1.71, "#8b835a", 0.07);
-  for (const side of [-1, 1])
-    box(desk, 0.08, 0.75, 0.08, side * 0.35, 0.38, 1.35, P.walnut);
-  plant(g, -5.9, 2.4, 1.4);
-  box(g, 2.3, 4.1, 0.95, 5.9, 2.05, -5.6, "#775737", 0.07);
-  box(g, 1.04, 3.8, 0.04, 5.35, 2.05, -5.1, "#8d6942");
-  box(g, 1.04, 3.8, 0.04, 6.45, 2.05, -5.1, "#8d6942");
-  box(g, 0.06, 0.35, 0.1, 5.92, 2, -5, "#c3a062");
-  box(g, 0.06, 0.35, 0.1, 6.07, 2, -5, "#c3a062");
 }
 
 function tree(parent, x, z, size = 1) {
@@ -529,15 +378,16 @@ export class HouseWorld {
     this.scene.add(sun);
     exterior(this.scene);
     this.rooms = {};
+    this.roomFixtures = {};
     for (const [name, z] of Object.entries(ROOM_Z)) {
       const group = new THREE.Group();
       group.position.z = z;
       this.rooms[name] = group;
       this.scene.add(group);
       makeRoomShell(group, name);
-      if (name === "living") livingFurniture(group);
-      else if (name === "dining") diningFurniture(group);
-      else bedroomFurniture(group);
+      const fixtures = createRoomFixtures(name);
+      group.add(fixtures);
+      this.roomFixtures[name] = fixtures;
     }
     // Dust catches the same warm light used by the menu.
     const vertices = new Float32Array(130 * 3);
@@ -582,21 +432,12 @@ export class HouseWorld {
   sync(appliances) {
     for (const item of appliances) {
       if (this.models.has(item.id)) continue;
-      const root = new THREE.Group();
-      const [x, z] = SLOTS[item.slot];
-      root.position.set(x, 0, z + ROOM_Z[item.room]);
-      let base = 1.49;
-      if (["fan", "fridge", "purifier"].includes(item.kind)) {
-        base = 0;
-        this.rooms[item.room].userData.pedestals[item.slot].visible = false;
-      }
-      if (item.kind === "ac") base = 3.95;
-      const model = applianceModel(item.kind);
-      model.position.y = base;
-      if (item.slot === 0) model.rotation.y = 0.25;
-      if (item.slot === 1) model.rotation.y = -0.25;
-      root.add(model);
-      this.scene.add(root);
+      const assembly = createPlacedAppliance(
+        item,
+        this.roomFixtures[item.room],
+      );
+      const { root, model } = assembly;
+      this.rooms[item.room].add(root);
       root.updateWorldMatrix(true, true);
       const bounds = new THREE.Box3().setFromObject(model);
       const center = bounds.getCenter(new THREE.Vector3());
@@ -612,12 +453,11 @@ export class HouseWorld {
         }),
       );
       halo.rotation.x = -Math.PI / 2;
-      halo.position.y = base + 0.015;
+      halo.position.y = model.position.y + 0.015;
       root.add(halo);
       halo.visible = false;
       this.models.set(item.id, {
-        root,
-        model,
+        ...assembly,
         halo,
         center,
         height: size.y,
@@ -627,22 +467,34 @@ export class HouseWorld {
     }
     for (const [id, value] of this.models) {
       if (!appliances.some((item) => item.id === id)) {
-        this.scene.remove(value.root);
+        value.root.removeFromParent();
         value.halo.geometry.dispose();
         value.halo.material.dispose();
         this.models.delete(id);
       }
     }
+
+    this.placementIssues = Object.entries(this.roomFixtures).flatMap(
+      ([room, fixtures]) =>
+        auditPlacements(
+          [...this.models.values()].filter((value) => value.room === room),
+          fixtures,
+        ),
+    );
+    document.body.dataset.placementIssues = String(this.placementIssues.length);
+    if (this.placementIssues.length)
+      console.error("Appliance placement:", ...this.placementIssues);
   }
+
   reset() {
     for (const value of this.models.values()) {
-      this.scene.remove(value.root);
+      value.root.removeFromParent();
       value.halo.geometry.dispose();
       value.halo.material.dispose();
     }
     this.models.clear();
-    for (const room of Object.values(this.rooms))
-      for (const pedestal of room.userData.pedestals) pedestal.visible = true;
+    this.placementIssues = [];
+    document.body.dataset.placementIssues = "0";
   }
   render(now, state) {
     const pose = this.controls.update(now);
