@@ -19,6 +19,7 @@ The installer is a local unsigned build; no code-signing certificate is configur
 - **Start** transitions from the live 3D house menu to a **three-second loading screen**. The survival clock starts afterward.
 - **Pliers:** hold an amber appliance continuously for the displayed time, initially 3–4 seconds and increasing toward 7 seconds. Releasing, changing rooms, or pausing resets an unfinished hold. Keyboard players can focus an appliance and hold Space.
 - **Gloves:** click an amber appliance repeatedly for its displayed number of taps.
+- Repair clicks and holds use the appliance's actual visible 3D surfaces. Hovering outlines its shape in gold; the old floating rectangular targets are removed. Radio controls, TV screens/stands, kettle bodies and other visible appliance parts can be selected. Empty space and furniture in front of an appliance do not count. Labels remain informational, and targets are disabled while the camera moves. Keyboard players can still focus an appliance with Tab.
 - Each indoor room starts with **3 random appliances**. Level 1 faults arrive every **10–12 seconds**. Each new level reduces the interval range by a random **1–2 seconds**, down to **2 seconds**.
 - New faults have **20 seconds** to repair at level 1, reduced by **2 seconds per level**, down to **4 seconds**. Existing faults keep the deadline assigned when they appeared.
 - Each overdue appliance starts at **₱1/sec**, plus **₱5/sec for every level after level 1**. Every **10 seconds that appliance remains overdue** adds another **₱2/sec** to its leak. The current level applies to all leaking appliances; overdue age is tracked separately for each appliance. Repairing stops its leak and resets that age.
@@ -42,8 +43,8 @@ npm run desktop
 - `npm run dev` serves a browser development preview.
 - `npm run build` creates the offline renderer in `dist/`.
 - `npm run package` builds the Windows x64 NSIS installer and unpacked application.
-- `npm test` checks gameplay rules, camera motion, and appliance placement against the actual 3D furniture geometry.
-- `npm run test:desktop` runs a hidden native application test against the built `file://` renderer. It checks the 3D menu, three-second loading transition, native bridge isolation, keyboard-only room navigation, pause, and saved leaderboard. It also advances the real game loop to six appliances per room, then checks all targets and repair labels at 1440×900 and 1024×650. Reports and screenshots are written to `artifacts/`. Running the unpacked application's executable with `--smoke-test` performs the same checks against the packaged renderer and writes the report to `%TEMP%/kurent-packaged-check/`.
+- `npm test` checks gameplay rules, camera motion, appliance placement, surface picking and furniture occlusion against the actual 3D geometry at both supported window sizes.
+- `npm run test:desktop` runs a hidden native application test against the built `file://` renderer. It checks the 3D menu, three-second loading transition, native bridge isolation, keyboard-only room navigation, pause, and saved leaderboard. It also advances the real game loop to six appliances per room, then checks all targets and repair labels at 1440×900 and 1024×650. Real mouse movement and presses verify the radio, TV and kettle surfaces, their hover outlines, and missed clicks in empty space. Reports and screenshots are written to `artifacts/`. Running the unpacked application's executable with `--smoke-test` performs the same checks against the packaged renderer and writes the report to `%TEMP%/kurent-packaged-check/`.
 
 For additional browser interaction checks, run the development server, open `/tests/browser.html`, and click **Run browser checks**. These use deterministic faults, isolated in-memory storage, and an accelerated clock. Test pages are excluded from the production build.
 
@@ -61,6 +62,7 @@ The supplied menu reference establishes the centered white **KURENT** title, sta
 - `src/world.js` and `src/models.js`: Three.js house, lighting, and appliances.
 - `src/room-layout.js`, `src/furniture.js`, and `src/placement.js`: room-specific furniture and appliance locations, support heights, and overlap/visibility checks.
 - `src/tool-station.js`: outside table and 3D pliers/gloves models.
+- `src/picking.js`: nearest visible appliance surface selection, furniture occlusion, and label projection.
 - `src/main.js` and `src/style.css`: menu, controls, HUD, and game screens.
 
 Renderer code has no Node.js access. The application uses context isolation, sandboxing, a content security policy, and blocked external navigation. Native bridge methods only close the application and toggle its full-screen view.

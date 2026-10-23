@@ -81,6 +81,8 @@ $("#app").innerHTML = `
 
 if (window.kurent?.desktop) document.body.classList.add("desktop");
 let labelLayoutKey = "";
+let scenePointer = null,
+  hoveredAppliance = null;
 const world = new HouseWorld($("#house-canvas"), (points, moving) => {
   $("#appliance-layers").classList.toggle("camera-moving", moving);
   for (const point of points) {
@@ -91,9 +93,57 @@ const world = new HouseWorld($("#house-canvas"), (points, moving) => {
     el.style.left = `${point.x}px`;
     el.style.top = `${point.y}px`;
     el.style.setProperty("--distance-scale", point.scale);
+    if (!point.tool) {
+      el.style.width = `${point.width / point.scale}px`;
+      el.style.height = `${point.height / point.scale}px`;
+      el.tabIndex = point.visible && !moving ? 0 : -1;
+    }
     el.classList.toggle("out-of-view", !point.visible);
   }
   if (!moving) positionRepairLabels(points);
+});
+
+function isScenePointer(event) {
+  return (
+    !!event.target.closest &&
+    !event.target.closest(
+      ".game-top,.house-map,.play-dock,.tool-station,#table-tools,#dialog-backdrop,#loading-screen,.window-bar,#menu-screen",
+    )
+  );
+}
+function eventAppliance(event) {
+  // Keyboard activation retains an accessible button for each appliance.
+  const accessible = event.target.closest?.("[data-appliance]");
+  if (accessible) return accessible.dataset.appliance;
+  if (!isScenePointer(event)) return null;
+  return world.pickAppliance(event.clientX, event.clientY, game.state);
+}
+function setHoveredAppliance(id) {
+  if (hoveredAppliance !== id)
+    $(`[data-appliance="${hoveredAppliance}"]`)?.classList.remove("hovered");
+  hoveredAppliance = id;
+  $(`[data-appliance="${id}"]`)?.classList.add("hovered");
+  world.hoveredAppliance = id;
+  $("#house-canvas").style.cursor = id ? "pointer" : "";
+  document.body.dataset.hoveredAppliance = id || "";
+}
+document.addEventListener("pointermove", (event) => {
+  scenePointer = isScenePointer(event)
+    ? { x: event.clientX, y: event.clientY }
+    : null;
+});
+document.addEventListener("pointerout", (event) => {
+  if (!event.relatedTarget) {
+    scenePointer = null;
+    setHoveredAppliance(null);
+  }
+});
+document.addEventListener("focusin", (event) => {
+  world.focusedAppliance =
+    event.target.closest("[data-appliance]")?.dataset.appliance || null;
+});
+document.addEventListener("focusout", () => {
+  world.focusedAppliance = null;
 });
 
 function positionRepairLabels(points) {
@@ -211,10 +261,11 @@ function renderAppliances() {
       .filter((a) => a.room === room)
       .map(
         (item) =>
-          `<button class="appliance-button ${item.fault ? "faulty" : ""}" data-appliance="${item.id}" aria-label="${item.name}${item.fault ? `, needs ${item.fault.method === "hold" ? "pliers, hold" : "gloves, click"} to repair` : ", working normally"}"><span class="target-corners"></span><span class="appliance-name">${item.name}</span>${item.fault ? `<svg class="label-leader" aria-hidden="true"><line x1="0" y1="0" x2="0" y2="0"/></svg><span class="task-tag"><span class="task-title">${item.name}</span>${icon(item.fault.method === "hold" ? "pliers" : "gloves", 18)}<span class="task-action">${item.fault.method === "hold" ? `HOLD ${item.fault.required.toFixed(1)}s` : `TAP ${item.fault.required}×`}</span><span class="task-countdown"></span></span><span class="repair-track"><span></span></span>` : ""}</button>`,
+          `<button class="appliance-button ${item.fault ? "faulty" : ""}" data-appliance="${item.id}" aria-label="${item.name}${item.fault ? `, needs ${item.fault.method === "hold" ? "pliers, hold" : "gloves, click"} to repair` : ", working normally"}"><span class="appliance-name">${item.name}</span>${item.fault ? `<svg class="label-leader" aria-hidden="true"><line x1="0" y1="0" x2="0" y2="0"/></svg><span class="task-tag"><span class="task-title">${item.name}</span>${icon(item.fault.method === "hold" ? "pliers" : "gloves", 18)}<span class="task-action">${item.fault.method === "hold" ? `HOLD ${item.fault.required.toFixed(1)}s` : `TAP ${item.fault.required}×`}</span><span class="task-countdown"></span></span><span class="repair-track"><span></span></span>` : ""}</button>`,
       )
       .join("");
   }
+  $(`[data-appliance="${hoveredAppliance}"]`)?.classList.add("hovered");
   $$("[data-tool]").forEach((el) => {
     const selected = el.dataset.tool === state.tool;
     el.classList.toggle("selected", selected);
@@ -445,13 +496,13 @@ document.addEventListener("click", (e) => {
     }
     return;
   }
-  const appliance = e.target.closest("[data-appliance]");
+  const appliance = eventAppliance(e);
   if (appliance) {
-    if (suppressClickId === appliance.dataset.appliance) {
+    if (suppressClickId === appliance) {
       suppressClickId = null;
       return;
     }
-    feedback(game.interact(appliance.dataset.appliance, "click"));
+    feedback(game.interact(appliance, "click"));
     renderHUD();
     return;
   }
@@ -480,11 +531,9 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("pointerdown", (e) => {
   if (e.button !== 0) return;
-  const button = e.target.closest("[data-appliance]");
-  if (!button) return;
-  const item = game.state.appliances.find(
-    (a) => a.id === button.dataset.appliance,
-  );
+  const id = eventAppliance(e);
+  if (!id) return;
+  const item = game.state.appliances.find((a) => a.id === id);
   if (item?.fault?.method === "hold") {
     suppressClickId = item.id;
     feedback(game.interact(item.id, "hold"));
@@ -494,7 +543,7 @@ document.addEventListener("pointerdown", (e) => {
 document.addEventListener("pointerup", () => game.cancelHold());
 document.addEventListener("pointercancel", () => game.cancelHold());
 document.addEventListener("contextmenu", (e) => {
-  if (e.target.closest("[data-appliance]")) e.preventDefault();
+  if (eventAppliance(e)) e.preventDefault();
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "F11" && window.kurent?.desktop) {
@@ -552,7 +601,11 @@ document.addEventListener("keyup", (e) => {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && game.state.status === "playing") showDialog("pause");
 });
-window.addEventListener("blur", () => game.cancelHold());
+window.addEventListener("blur", () => {
+  game.cancelHold();
+  scenePointer = null;
+  setHoveredAppliance(null);
+});
 $("#dialog-backdrop").addEventListener("click", (e) => {
   if (e.target === $("#dialog-backdrop") && activeDialog !== "over")
     closeDialog();
@@ -574,6 +627,11 @@ function frame(now) {
       lastHUDFrame = now;
     }
   }
+  setHoveredAppliance(
+    scenePointer
+      ? world.pickAppliance(scenePointer.x, scenePointer.y, game.state)
+      : null,
+  );
   world.render(now, game.state);
   lastFrame = now;
   requestAnimationFrame(frame);

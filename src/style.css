@@ -812,7 +812,7 @@ kbd {
   width: 110px;
   height: 105px;
   transform: translate(-50%, -50%) scale(var(--distance-scale, 1));
-  pointer-events: auto !important;
+  pointer-events: none !important;
   padding: 0;
   user-select: none;
   -webkit-user-select: none;
@@ -827,21 +827,8 @@ kbd {
   opacity: 0;
   pointer-events: none !important;
 }
-.target-corners {
-  position: absolute;
-  inset: 8px;
-  opacity: 0;
-  transition: opacity 0.2s;
-  background:
-    linear-gradient(#ebcd83, #ebcd83) left top/12px 1px no-repeat,
-    linear-gradient(#ebcd83, #ebcd83) left top/1px 12px no-repeat,
-    linear-gradient(#ebcd83, #ebcd83) right bottom/12px 1px no-repeat,
-    linear-gradient(#ebcd83, #ebcd83) right bottom/1px 12px no-repeat;
-}
-.appliance-button:hover .target-corners,
-.appliance-button:focus-visible .target-corners,
-.holding .target-corners {
-  opacity: 0.8;
+.appliance-button:focus-visible {
+  outline: none;
 }
 .appliance-name {
   position: absolute;
@@ -858,7 +845,7 @@ kbd {
   opacity: 0;
   pointer-events: none;
 }
-.appliance-button:hover .appliance-name,
+.appliance-button.hovered .appliance-name,
 .faulty .appliance-name,
 .appliance-button:focus-visible .appliance-name {
   opacity: 1;

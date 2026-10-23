@@ -1,5 +1,10 @@
 import * as THREE from "three";
 import { HouseCamera } from "./camera.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { OutlinePass } from "three/addons/postprocessing/OutlinePass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { AppliancePicker, projectBounds } from "./picking.js";
 import {
   box,
   cylinder,
@@ -361,6 +366,7 @@ export class HouseWorld {
     this.toolStation = exterior(this.scene).userData.toolStation;
     this.rooms = {};
     this.roomFixtures = {};
+    this.pickers = {};
     for (const [name, z] of Object.entries(ROOM_Z)) {
       const group = new THREE.Group();
       group.position.z = z;
@@ -370,6 +376,7 @@ export class HouseWorld {
       const fixtures = createRoomFixtures(name);
       group.add(fixtures);
       this.roomFixtures[name] = fixtures;
+      this.pickers[name] = new AppliancePicker(group);
     }
     // Dust catches the same warm light used by the menu.
     const vertices = new Float32Array(130 * 3);
@@ -391,6 +398,20 @@ export class HouseWorld {
       }),
     );
     this.scene.add(this.dust);
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.outline = new OutlinePass(
+      new THREE.Vector2(1, 1),
+      this.scene,
+      this.camera,
+    );
+    this.outline.visibleEdgeColor.set("#ffe0a0");
+    this.outline.hiddenEdgeColor.set("#000000");
+    this.outline.edgeStrength = 3;
+    this.outline.edgeThickness = 1.3;
+    this.outline.edgeGlow = 0.1;
+    this.composer.addPass(this.outline);
+    this.composer.addPass(new OutputPass());
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(canvas.parentElement);
     this.resize();
@@ -403,6 +424,7 @@ export class HouseWorld {
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+    this.composer.setSize(width, height);
   }
   menu(instant = false) {
     this.controls.showMenu(performance.now(), instant);
@@ -424,6 +446,11 @@ export class HouseWorld {
       const bounds = new THREE.Box3().setFromObject(model);
       const center = bounds.getCenter(new THREE.Vector3());
       const size = bounds.getSize(new THREE.Vector3());
+      // Keep the radio's label by its housing rather than by its antenna.
+      const labelBounds =
+        item.kind === "radio"
+          ? new THREE.Box3().setFromObject(model.children[0])
+          : bounds;
       const halo = new THREE.Mesh(
         new THREE.RingGeometry(0.4, 0.55, 32),
         new THREE.MeshBasicMaterial({
@@ -438,6 +465,7 @@ export class HouseWorld {
       halo.position.y = model.position.y + 0.015;
       root.add(halo);
       halo.visible = false;
+      halo.userData.ignorePicking = true;
       this.models.set(item.id, {
         ...assembly,
         halo,
@@ -445,6 +473,7 @@ export class HouseWorld {
         height: size.y,
         width: size.x,
         room: item.room,
+        labelBounds,
       });
     }
     for (const [id, value] of this.models) {
@@ -455,6 +484,12 @@ export class HouseWorld {
         this.models.delete(id);
       }
     }
+    for (const [room, picker] of Object.entries(this.pickers))
+      picker.setAppliances(
+        [...this.models]
+          .filter(([, value]) => value.room === room)
+          .map(([id, value]) => ({ id, model: value.model })),
+      );
 
     this.placementIssues = Object.entries(this.roomFixtures).flatMap(
       ([room, fixtures]) =>
@@ -475,6 +510,9 @@ export class HouseWorld {
       value.halo.material.dispose();
     }
     this.models.clear();
+    this.hoveredAppliance = null;
+    this.focusedAppliance = null;
+    for (const picker of Object.values(this.pickers)) picker.setAppliances([]);
     this.placementIssues = [];
     document.body.dataset.placementIssues = "0";
   }
@@ -484,6 +522,7 @@ export class HouseWorld {
     const pose = this.controls.update(now);
     this.camera.position.set(...pose.position);
     this.camera.lookAt(...pose.target);
+    this.camera.updateMatrixWorld();
     if (this.camera.fov !== pose.fov) {
       this.camera.fov = pose.fov;
       this.camera.updateProjectionMatrix();
@@ -518,14 +557,17 @@ export class HouseWorld {
       if (item.room !== ["outside", "living", "dining", "bedroom"][state.room])
         continue;
       const anchor = value.center.clone();
-      anchor.y += value.height * 0.3;
       anchor.project(this.camera);
       const distance = this.camera.position.distanceTo(value.center);
       const scale = Math.max(0.6, Math.min(1.15, 10 / distance));
       projected.push({
         id: item.id,
-        x: (anchor.x * 0.5 + 0.5) * this.width,
-        y: (-anchor.y * 0.5 + 0.5) * this.height,
+        ...projectBounds(
+          value.labelBounds,
+          this.camera,
+          this.width,
+          this.height,
+        ),
         scale,
         visible:
           anchor.z < 1 &&
@@ -536,10 +578,40 @@ export class HouseWorld {
     }
     this.onProjection(projected, !!this.controls.transition);
     this.dust.position.y = Math.sin(time * 0.08) * 0.2;
-    this.renderer.render(this.scene, this.camera);
+    const selected = this.models.get(
+      state.hold || this.hoveredAppliance || this.focusedAppliance,
+    );
+    const showOutline =
+      selected &&
+      selected.room ===
+        ["outside", "living", "dining", "bedroom"][state.room] &&
+      state.status === "playing" &&
+      !this.controls.transition;
+    this.outline.selectedObjects = showOutline ? [selected.model] : [];
+    if (showOutline) this.composer.render();
+    else this.renderer.render(this.scene, this.camera);
+  }
+  pickAppliance(clientX, clientY, state) {
+    if (
+      state.status !== "playing" ||
+      this.controls.transition ||
+      state.room === 0
+    )
+      return null;
+    const area = this.canvas.getBoundingClientRect();
+    const room = ["outside", "living", "dining", "bedroom"][state.room];
+    return this.pickers[room].pick(
+      this.camera,
+      clientX - area.left,
+      clientY - area.top,
+      area.width,
+      area.height,
+    );
   }
   dispose() {
     this.observer.disconnect();
+    for (const pass of this.composer.passes) pass.dispose();
+    this.composer.dispose();
     this.renderer.dispose();
   }
 }

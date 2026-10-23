@@ -173,11 +173,100 @@ app
     }
     await win.webContents.executeJavaScript(`window.__smokeRate = 0`);
     const fullRoomChecks = [];
+    const surfaceChecks = [];
     for (const width of [1440, 1024]) {
       win.setSize(width, width === 1440 ? 900 : 650);
       for (let room = 1; room < 4; room++) {
         await navigateTo(room);
         await new Promise((resolve) => setTimeout(resolve, 1250));
+        // Real mouse input verifies the radio, TV and kettle from the bug report.
+        for (const name of room === 1
+          ? ["Radio", "Television"]
+          : room === 2
+            ? ["Electric kettle"]
+            : []) {
+          const target = await win.webContents.executeJavaScript(`(() => {
+            const el = [...document.querySelectorAll('.room-task-group:not([hidden]) .appliance-button')].find(el => el.getAttribute('aria-label').split(',')[0] === ${JSON.stringify(name)});
+            const r=el.getBoundingClientRect();
+            return {id:el.dataset.appliance,x:r.x,y:r.y,width:r.width,height:r.height,label:el.getAttribute('aria-label')};
+          })()`);
+          let point = null;
+          for (const [fx, fy] of [
+            [0.5, 0.5],
+            [0.5, 0.25],
+            [0.25, 0.5],
+            [0.75, 0.5],
+            [0.5, 0.75],
+            [0.25, 0.25],
+            [0.75, 0.25],
+          ]) {
+            const candidate = {
+              x: Math.round(target.x + target.width * fx),
+              y: Math.round(target.y + target.height * fy),
+            };
+            win.webContents.sendInputEvent({ type: "mouseMove", ...candidate });
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            const hovered = await win.webContents.executeJavaScript(
+              `document.body.dataset.hoveredAppliance`,
+            );
+            if (hovered === target.id) {
+              point = candidate;
+              break;
+            }
+          }
+          let activated = false;
+          if (point) {
+            fs.writeFileSync(
+              path.join(
+                artifactDir,
+                "desktop-surface-" +
+                  width +
+                  "-" +
+                  name.toLowerCase().replaceAll(" ", "-") +
+                  ".png",
+              ),
+              (await win.webContents.capturePage()).toPNG(),
+            );
+            win.webContents.sendInputEvent({
+              type: "mouseDown",
+              button: "left",
+              clickCount: 1,
+              ...point,
+            });
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            if (target.label.includes("hold"))
+              activated = await win.webContents.executeJavaScript(
+                `document.querySelector('[data-appliance="${target.id}"]').classList.contains('holding')`,
+              );
+            win.webContents.sendInputEvent({
+              type: "mouseUp",
+              button: "left",
+              clickCount: 1,
+              ...point,
+            });
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            if (!target.label.includes("hold"))
+              activated = await win.webContents.executeJavaScript(
+                `document.querySelector('#toast').textContent.includes('${target.label.includes("click") ? "needs gloves" : "running smoothly"}')`,
+              );
+          }
+          const empty = {
+            x: Math.round(target.x + target.width * 0.15),
+            y: Math.round(target.y - target.height * 0.45),
+          };
+          win.webContents.sendInputEvent({ type: "mouseMove", ...empty });
+          await new Promise((resolve) => setTimeout(resolve, 80));
+          const emptyMisses = await win.webContents.executeJavaScript(
+            `document.body.dataset.hoveredAppliance !== '${target.id}'`,
+          );
+          surfaceChecks.push({
+            name,
+            width,
+            bodyHit: !!point,
+            activated,
+            emptyMisses,
+          });
+        }
         fullRoomChecks.push(
           await win.webContents.executeJavaScript(`({
         room: document.querySelector('#current-room').textContent,
@@ -248,6 +337,7 @@ app
       mouseNavigationDisabled,
       fullRoster,
       fullRoomChecks,
+      surfaceChecks,
       labelsValid,
       saved,
       errors,
@@ -265,6 +355,10 @@ app
         mouseNavigationDisabled &&
         fullRoster &&
         labelsValid &&
+        surfaceChecks.length === 6 &&
+        surfaceChecks.every(
+          (check) => check.bodyHit && check.activated && check.emptyMisses,
+        ) &&
         fullRoomChecks.every(
           (r) =>
             r.placementIssues === "0" &&
