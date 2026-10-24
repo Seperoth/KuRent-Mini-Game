@@ -122,7 +122,7 @@ export function createGame(random = Math.random) {
     if (!available.length) return null;
     const item = available[Math.floor(random() * available.length)];
     const method = random() > 0.5 ? "hold" : "click";
-    const holdMin = Math.min(6, 3 + (state.level - 1) * 0.5);
+    const holdMin = 2 + (state.level - 1) * 0.2;
     item.fault = {
       method,
       deadline: state.time + graceForLevel(state.level),

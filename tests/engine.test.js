@@ -174,20 +174,25 @@ test("difficulty increases every 30 seconds and new appliances cap at six per ro
   assert.equal(game.state.appliances.length, 18);
 });
 
-test("early holds are shorter and late holds never exceed seven seconds", () => {
-  const early = start(() => 0.9);
-  spawnFirst(early);
-  assert.ok(
-    firstFault(early).fault.required >= 3 &&
-      firstFault(early).fault.required < 4,
-  );
-  const late = start(() => 0.9);
-  late.state.time = 1200;
-  late.tick(1);
-  assert.ok(
-    firstFault(late).fault.required >= 6 &&
-      firstFault(late).fault.required <= 7,
-  );
+test("holds start at 2-3 seconds, add 0.2 seconds per level and retain the seven-second cap", () => {
+  const cases = [
+    [1, 0.51, 2.51],
+    [1, 0.999999, 2.999999],
+    [1, 0.9, 2.9],
+    [2, 0.9, 3.1],
+    [3, 0.9, 3.3],
+    [10, 0.9, 4.7],
+    [21, 0.9, 6.9],
+    [26, 0.9, 7],
+    [41, 0.9, 7],
+  ];
+  for (const [level, random, expected] of cases) {
+    const game = start(() => random);
+    game.state.time = (level - 1) * 30;
+    game.state.nextFault = game.state.time;
+    game.tick(0.001);
+    assert.ok(Math.abs(firstFault(game).fault.required - expected) < 1e-9);
+  }
 });
 
 test("fault windows decrease by 1-2 seconds each level, with a two-second floor", () => {
