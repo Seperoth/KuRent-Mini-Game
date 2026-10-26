@@ -1,16 +1,26 @@
-# KuRent 0.0.2 — Windows desktop application
+# KuRent — install and play on Windows
 
 A home-maintenance survival game with an amber woodland theme, a live 3D house menu, and furnished 3D rooms. Move through the house with a forward-facing camera: **outside → living room → dining room → bedroom**.
 
-## Play the application
+## Download and install
 
-Build the installer with `npm run package`. The output is **`release/KuRent-Setup-0.0.2.exe`**. It installs KuRent for the current Windows user and creates Start Menu and desktop shortcuts. `release/win-unpacked/KuRent.exe` runs the application directly from its unpacked folder; keep that folder's files together.
+**[Download KuRent 0.0.2 for Windows (.exe)](https://github.com/Seperoth/KuRent-Mini-Game/releases/download/v0.0.2/KuRent-Setup-0.0.2.exe)** · [Latest release](https://github.com/Seperoth/KuRent-Mini-Game/releases/latest)
 
-Version 0.0.2 fixes overlapping room furniture and appliances. Each appliance type has a reserved floor, counter, desk, or wall location appropriate to its size. All six locations in every room are checked together for intersections, support fit, and visibility from the room camera. Random starting rosters and later additions use these same locations. Repair labels include the appliance name and move apart when crowded, with a connector pointing to the appliance. The original 0.0.1 source checkpoint and installer remain available.
+1. Download **KuRent-Setup-0.0.2.exe** using the link above (Windows, 64-bit/x64; about 113 MB).
+2. Open the downloaded installer and follow the setup steps.
+3. Launch **KuRent** from your desktop or Start Menu, then choose **START**.
 
-The installed application works offline. All artwork, 3D models, fonts, game code, and sound effects are included. No web server, browser, account, or Node.js installation is needed to play.
+**Everything needed to play is included:** the application runtime, game code, 3D models, artwork, fonts, and sound effects. Players do not need Node.js, npm, Python, Git, Electron, or any other library setup. The installed game works offline without a game account or web server.
 
-The installer is a local unsigned build; no code-signing certificate is configured.
+Players only need the **.exe installer**. The source ZIP files on GitHub are for developers. Installation creates desktop and Start Menu shortcuts, and KuRent can be removed through Windows Settings → Apps.
+
+For future updates, close KuRent and run the new version's installer from [Releases](https://github.com/Seperoth/KuRent-Mini-Game/releases/latest). Updates are installed manually.
+
+The current installer is unsigned. Optional SHA-256 checksums are provided with the [0.0.2 release](https://github.com/Seperoth/KuRent-Mini-Game/releases/tag/v0.0.2).
+
+## About version 0.0.2
+
+Version 0.0.2 includes room-specific appliance placement, repairs on the objects' visible surfaces, a large arc-shaped tool display, and difficulty increases every 30 seconds. Hold repairs start at 2–3 seconds and increase by 0.2 seconds per level. See the [release notes](docs/RELEASE-0.0.2.md) for the full changes.
 
 ## Controls and game rules
 
@@ -29,40 +39,6 @@ The installer is a local unsigned build; no code-signing certificate is configur
 - The pause menu can finish a run early and save it. The **10 longest runs** are saved locally in the desktop application's profile. Browser development previews keep a separate leaderboard.
 - **Exit** on the main menu closes the desktop application.
 
-## Development
+## For developers
 
-Requires Node.js 22.12+ and Windows for the Windows installer.
-
-```sh
-npm install
-npm run desktop
-```
-
-- `npm run desktop` builds and launches the desktop application.
-- `npm start` launches the most recent build.
-- `npm run dev` serves a browser development preview.
-- `npm run build` creates the offline renderer in `dist/`.
-- `npm run package` builds the Windows x64 NSIS installer and unpacked application.
-- `npm test` checks gameplay rules, camera motion, appliance placement, surface picking and furniture occlusion against the actual 3D geometry at both supported window sizes.
-- `npm run test:desktop` runs a hidden native application test against the built `file://` renderer. It checks the 3D menu, three-second loading transition, native bridge isolation, keyboard-only room navigation, pause, and saved leaderboard. It also advances the real game loop to six appliances per room, then checks all targets and repair labels at 1440×900 and 1024×650. Real mouse movement and presses verify the radio, TV and kettle surfaces, their hover outlines, and missed clicks in empty space. Reports and screenshots are written to `artifacts/`. Running the unpacked application's executable with `--smoke-test` performs the same checks against the packaged renderer and writes the report to `%TEMP%/kurent-packaged-check/`.
-
-For additional browser interaction checks, run the development server, open `/tests/browser.html`, and click **Run browser checks**. These use deterministic faults, isolated in-memory storage, and an accelerated clock. Test pages are excluded from the production build.
-
-## Visual direction
-
-The supplied menu reference establishes the centered white **KURENT** title, stacked **START / LEADERBOARD / EXIT** options, deep brown overlay, and translucent amber ribbons. The menu now looks toward the same 3D house used in gameplay. This palette and typography continue through the HUD, loading screen, tool station, repair indicators, leaderboard, pause screen, and results.
-
-[The user-supplied Airplane Chefs video](https://www.youtube.com/watch?v=uC3Mmml-Cjc) informs the forward-facing perspective and smooth camera travel between viewpoints. House artwork, models, rooms, and repair gameplay are original code-native assets.
-
-## Application structure
-
-- `desktop/`: Electron main process and narrowly scoped, isolated preload bridge.
-- `src/engine.js`: survival and repair rules, independent of rendering.
-- `src/camera.js`: smooth camera travel, interrupted transitions, and reduced motion.
-- `src/world.js` and `src/models.js`: Three.js house, lighting, and appliances.
-- `src/room-layout.js`, `src/furniture.js`, and `src/placement.js`: room-specific furniture and appliance locations, support heights, and overlap/visibility checks.
-- `src/tool-station.js`: outside table and 3D pliers/gloves models.
-- `src/picking.js`: nearest visible appliance surface selection, furniture occlusion, and label projection.
-- `src/main.js` and `src/style.css`: menu, controls, HUD, and game screens.
-
-Renderer code has no Node.js access. The application uses context isolation, sandboxing, a content security policy, and blocked external navigation. Native bridge methods only close the application and toggle its full-screen view.
+Source setup, build commands, packaging, tests, and application structure are in [DEVELOPMENT.md](DEVELOPMENT.md). These steps are only needed to change or build the game.
